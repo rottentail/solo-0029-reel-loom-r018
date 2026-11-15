@@ -14,29 +14,24 @@ class Renderer:
         self.stopping = threading.Event()
         self.threads = []
 
-    def _execution_cancelled(self, ticket_id, scope):
-        requested = self.stopping.is_set() or self.tickets.cancellation_requested(ticket_id)
-        if requested and not scope["interrupted"]:
-            scope["interrupted"] = True
-            self.processes.interrupt()
-        return self.stopping.is_set()
+    def _execution_cancelled(self, ticket_id):
+        return self.stopping.is_set() or self.tickets.cancellation_requested(ticket_id)
 
-    def _execution_progress(self, ticket_id, scope, value):
-        if not self._execution_cancelled(ticket_id, scope):
+    def _execution_progress(self, ticket_id, value):
+        if not self._execution_cancelled(ticket_id):
             self.tickets.progress(ticket_id, value)
 
     def execute(self, ticket):
         ticket_id = ticket["id"]
         snapshot = ticket["snapshot"]
-        scope = {"ticket": ticket_id, "interrupted": False}
         suffix = ".mp4" if snapshot["look"]["spec"]["kind"] == "video" else ".wav"
         try:
             with self.blobs.temporary(suffix) as output:
                 args = self.planner.compile(snapshot, lambda key: self.blobs.resolve(key, verify=True), output)
                 duration = seconds(snapshot["document"]["duration_tick"])
                 self.processes.run(args,
-                    cancelled=lambda: self._execution_cancelled(ticket_id, scope),
-                    progress=lambda value: self._execution_progress(ticket_id, scope, value), duration=duration)
+                    cancelled=lambda: self._execution_cancelled(ticket_id),
+                    progress=lambda value: self._execution_progress(ticket_id, value), duration=duration)
                 metadata = inspect_media(output, self.settings)
                 actual = seconds(metadata["duration_tick"])
                 tolerance = max(0.15, 2/float(__import__('fractions').Fraction(snapshot["look"]["spec"]["frame_rate"])))

@@ -1,6 +1,5 @@
 import json
 import math
-import threading
 from .errors import missing, require
 from .probe import compatible_audio
 from .samples import read_pcm, describe_samples, silence_intervals, waveform_buckets
@@ -32,10 +31,7 @@ class AudioAnalysis:
             existing = db.execute("SELECT id FROM analyses WHERE fingerprint=?", (fingerprint,)).fetchone()
             if existing:
                 return self.get(existing["id"], db)
-        owner = f"analysis:{threading.get_ident()}:{fingerprint}"
-        self.processes.reserve(owner)
         result = self._measure(asset, kind, settings)
-        self.processes.release_reservation(owner)
         return self.persist(asset_id, kind, settings, result, fingerprint)
 
     def _measure(self, asset, kind, settings):
